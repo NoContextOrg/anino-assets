@@ -1,0 +1,107 @@
+# Release Workflow
+#
+# This workflow creates GitHub Releases and publishes assets.
+# Triggers on version tags (v*) or manual workflow_dispatch.
+#
+# Recommended Branch Protection Rules:
+# - Require pull request reviews before merging (1 approval minimum)
+# - Require the Assets CI workflow to pass before merging
+# - Require conversation resolution before merging
+# - Restrict who can push to matching branches
+# - Dismiss stale pull request approvals when new commits are pushed
+# - Do not allow bypassing above settings
+# - Restrict force pushes and deletions
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g., v1.0.0)'
+        required: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository with Git LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Install and pull Git LFS files
+        run: |
+          set -e
+          git lfs install
+          git lfs pull
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          else
+            TAG="${{ github.ref }}"
+            TAG="${TAG#refs/tags/}"
+          fi
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG"
+
+      - name: Validate release tag format
+        run: |
+          set -e
+          TAG="${{ steps.tag.outputs.tag }}"
+          
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "⚠ Warning: Tag '$TAG' does not match semantic versioning (v*.*.*)"
+          fi
+
+      - name: Generate asset manifest
+        run: |
+          set -e
+          echo "Generating asset manifest..."
+          
+          {
+            echo "# Asset Manifest for ${{ steps.tag.outputs.tag }}"
+            echo "# Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "# Repository: ${{ github.repository }}"
+            echo "# Release Tag: ${{ steps.tag.outputs.tag }}"
+            echo "# Commit: ${{ github.sha }}"
+            echo ""
+            
+            echo "## Directory Structure"
+            find . -type d ! -path './.git/*' ! -path './.github/*' -not -path '*/.*' | sort | sed 's|^\./||' | grep -v '^$'
+            echo ""
+            
+            echo "## File Listing"
+            find . -type f ! -path './.git/*' ! -path './.github/*' -not -path '*/.*' | sort | sed 's|^\./||' | while read -r file; do
+              SIZE=$(stat -c%s "$file" 2>/dev/null || echo 0)
+              echo "$file ($SIZE bytes)"
+            done
+          } > asset-manifest.txt
+          
+          echo "✅ Asset manifest generated ($(wc -l < asset-manifest.txt) lines)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          files: asset-manifest.txt
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release summary
+        run: |
+          echo "✅ Release created successfully"
+          echo "Tag: ${{ steps.tag.outputs.tag }}"
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}"

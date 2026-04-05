@@ -1,0 +1,116 @@
+# Assets CI Workflow
+#
+# This workflow validates the integrity of the asset repository on every push and pull request.
+# 
+# Recommended Branch Protection Rules:
+# - Require pull request reviews before merging (1 approval minimum)
+# - Require this workflow to pass before merging
+# - Require conversation resolution before merging
+# - Restrict who can push to matching branches
+# - Dismiss stale pull request approvals when new commits are pushed
+# - Do not allow bypassing above settings
+# - Restrict force pushes and deletions
+
+name: Assets CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate-assets:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository with Git LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install and pull Git LFS files
+        run: |
+          set -e
+          git lfs install
+          git lfs pull
+
+      - name: Validate required folders exist
+        run: |
+          set -e
+          REQUIRED_FOLDERS=("ar" "rpg" "vr" "web" "shared" "metadata")
+          
+          for folder in "${REQUIRED_FOLDERS[@]}"; do
+            if [ ! -d "$folder" ]; then
+              echo "❌ ERROR: Required folder '$folder' not found at repository root"
+              exit 1
+            fi
+            echo "✓ Folder '$folder' exists"
+          done
+          
+          echo "✅ All required folders validated"
+
+      - name: Scan for untracked large files
+        run: |
+          set -e
+          echo "Scanning for files larger than 5MB not tracked by Git LFS..."
+          
+          LARGE_FILES_FOUND=false
+          UNTRACKED_LARGE_FILES=""
+          
+          while IFS= read -r file; do
+            SIZE_BYTES=$(stat -c%s "$file" 2>/dev/null || echo 0)
+            SIZE_MB=$(echo "scale=2; $SIZE_BYTES / 1048576" | bc)
+            
+            # Check if file is larger than 5MB (5242880 bytes)
+            if [ "$SIZE_BYTES" -gt 5242880 ]; then
+              # Check if file is tracked by Git LFS
+              if ! git check-attr -a "$file" | grep -q "text=auto.*delta=lfs"; then
+                echo "⚠ Large untracked file: $file (${SIZE_MB}MB)"
+                UNTRACKED_LARGE_FILES="${UNTRACKED_LARGE_FILES}$file (${SIZE_MB}MB)\n"
+                LARGE_FILES_FOUND=true
+              fi
+            fi
+          done < <(find . -type f ! -path './.git/*' ! -path './.github/*' -print0 | xargs -0)
+          
+          if [ "$LARGE_FILES_FOUND" = true ]; then
+            echo "❌ ERROR: Found files larger than 5MB not tracked by Git LFS:"
+            echo -e "$UNTRACKED_LARGE_FILES"
+            exit 1
+          fi
+          
+          echo "✅ No untracked large files found"
+
+      - name: Generate asset manifest
+        run: |
+          set -e
+          echo "Generating asset manifest..."
+          
+          {
+            echo "# Asset Manifest"
+            echo "# Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "# Repository: ${{ github.repository }}"
+            echo "# Commit: ${{ github.sha }}"
+            echo ""
+            
+            echo "## Directory Structure"
+            find . -type d ! -path './.git/*' ! -path './.github/*' -not -path '*/.*' | sort | sed 's|^\./||' | grep -v '^$'
+            echo ""
+            
+            echo "## File Listing"
+            find . -type f ! -path './.git/*' ! -path './.github/*' -not -path '*/.*' | sort | sed 's|^\./||' | while read -r file; do
+              SIZE=$(stat -c%s "$file" 2>/dev/null || echo 0)
+              echo "$file ($SIZE bytes)"
+            done
+          } > asset-manifest.txt
+          
+          echo "✅ Asset manifest generated ($(wc -l < asset-manifest.txt) lines)"
+
+      - name: Upload asset manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-manifest
+          path: asset-manifest.txt
+          retention-days: 30
