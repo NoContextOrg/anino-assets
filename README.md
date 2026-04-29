@@ -43,100 +43,302 @@ anino-assets/
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Git with LFS support:** https://git-lfs.github.com/
-- **Access to the main project repository**
+Install the following on your development machine:
 
-### Adding Assets as a Submodule
+- **Git** — Version control system
+  ```bash
+  # Arch Linux / EndeavourOS
+  sudo pacman -S git
+  
+  # Ubuntu / Debian
+  sudo apt install git -y
+  ```
 
-Add the asset repository to your game project:
+- **Git LFS** — Large file storage
+  ```bash
+  # Arch Linux / EndeavourOS
+  sudo pacman -S git-lfs
+  
+  git lfs install
+  ```
+  For other platforms: https://git-lfs.github.com/
+
+- **Game Engine** (optional) — Godot 4.x, Unity, or your project's engine version
+
+---
+
+## 📖 Integration Guide: Adding Assets to Your Game Project
+
+This section provides a **step-by-step workflow** for integrating assets into game projects using Git submodules, sparse checkout, and Git LFS.
+
+### Step 1: Clone with Submodules
+
+Clone your game repository with assets initialized:
 
 ```bash
-cd /path/to/your/game-project
-git submodule add -b main --depth 1 https://github.com/NoContextOrg/anino-assets.git assets/rpg
+git clone --recurse-submodules https://github.com/YourOrg/your-game-project.git
+cd your-game-project
 ```
 
-**Parameters:**
-- `-b main` — Track the main branch
-- `--depth 1` — Shallow clone to minimize storage
-- `assets/rpg` — Local path where assets will reside
+> If already cloned, initialize submodules: `git submodule update --init --recursive`
 
-### Initializing Git LFS
-
-Ensure Git LFS is installed on your system:
+### Step 2: Add Assets (If Not Already Configured)
 
 ```bash
+git submodule add https://github.com/NoContextOrg/anino-assets.git assets
+git add .
+git commit -m "chore(assets): add anino-assets as submodule"
+```
+
+### Step 3: Configure Sparse Checkout (Recommended)
+
+Pull only needed folders to optimize disk usage:
+
+```bash
+cd assets
+git sparse-checkout init --cone
+git sparse-checkout set web shared  # Adjust as needed
+cd ..
+```
+
+**Benefits:** Reduces storage, faster clones, avoids unrelated folders (`ar/`, `rpg/`, `vr/`)
+
+### Step 4: Pull Git LFS Assets
+
+```bash
+cd assets
 git lfs install
-git lfs pull  # Pull all large files
+git lfs pull
+cd ..
 ```
 
-### Updating Assets
+### Step 5: Lock to Stable Version (Recommended)
 
-Fetch the latest asset updates from the central repository:
+Pin your project to a tested asset snapshot:
 
 ```bash
-git submodule update --remote --merge
+cd assets
+git fetch --tags
+git checkout v1.0.0  # Use semantic versioning
+cd ..
+git add assets
+git commit -m "chore(assets): lock assets to v1.0.0"
+git push
+```
+
+### Daily Workflow
+
+```bash
+# Pull latest code
+git pull
+
+# Update submodules
+git submodule update --init --recursive
+
+# Update assets (if pinned, skip this—you'll stay on your tag)
+cd assets
+git pull origin main && git lfs pull  # Or: git checkout v1.1.0 && git lfs pull
+cd ..
+git add assets && git commit -m "chore(assets): update" && git push
+```
+
+### Quick Reference
+
+| Task | Command |
+|------|---------|
+| Clone with assets | `git clone --recurse-submodules <repo>` |
+| Initialize submodules | `git submodule update --init --recursive` |
+| Sparse checkout | `cd assets && git sparse-checkout init --cone && git sparse-checkout set web shared` |
+| Pull LFS files | `cd assets && git lfs pull` |
+| Update assets | `cd assets && git pull origin main && git lfs pull` |
+| Lock to tag | `cd assets && git checkout v1.0.0` |
+| List LFS files | `git lfs ls-files` |
+| Check file tracking | `git check-attr -a <file>` |
+
+---
+
+## 🔐 Best Practices
+
+### For Game Developers (Consuming Assets)
+
+1. **Do not `.gitignore` the `assets/` folder** — Track it as a submodule
+2. **Use sparse checkout** to reduce clone size and improve performance
+3. **Lock to a stable tag** for releases to prevent unexpected changes
+4. **Never edit submodule content directly** — Always update the central repository
+5. **Document asset versions** in your release notes
+6. **Keep commits atomic** — Small, focused updates improve traceability
+7. **Test after updates** — Verify the game loads properly with new assets
+
+### For Asset Maintainers (Managing This Repository)
+
+1. **Use semantic versioning** for tags: `v1.0.0`, `v1.1.0-beta`
+2. **Commit message convention:**
+   ```
+   feat: add new character animations for RPG
+   fix: resolve texture compression issue
+   docs: update asset guide
+   chore: optimize image sizes
+   ```
+3. **Keep PRs scoped** to a single purpose (one asset type or feature)
+4. **Git LFS configuration** — Track all large file types in `.gitattributes`:
+   ```bash
+   git lfs track "*.png" "*.jpg" "*.wav" "*.ogg" "*.psd" "*.blend" "*.fbx" "*.glb"
+   ```
+5. **Coordinate updates** with game projects, especially when paths/filenames change
+6. **Document breaking changes** for consuming projects
+
+---
+
+## 🔧 Troubleshooting
+
+### Git LFS: Pointers Instead of Files
+
+**Problem:** Assets show as text pointers instead of actual files
+
+**Solution:**
+```bash
+cd assets
+git lfs install
+git lfs pull
+```
+
+### Submodule Not Updating
+
+**Problem:** Assets folder is outdated
+
+**Solution:**
+```bash
+cd assets
+git fetch
+git log --oneline -5
+
+# Update or pin to a version
+git pull origin main  # Latest
+# OR
+git checkout v1.0.0   # Specific version
+
+cd ..
+git add assets
+git commit -m "chore(assets): update"
+```
+
+### Sparse Checkout Issues
+
+**Problem:** Missing or unwanted folders
+
+**Solution:**
+```bash
+cd assets
+git sparse-checkout init --cone
+git sparse-checkout set web shared  # Adjust as needed
+git pull
+cd ..
+```
+
+### CI Workflow Fails (Large Untracked Files)
+
+**Problem:** Asset file not tracked by Git LFS
+
+**Solution:**
+```bash
+git lfs track "*.png"
+git rm --cached large-file.png
+git add large-file.png
+git commit -m "chore: configure Git LFS"
 ```
 
 ---
 
-## 📦 Asset Organization
-
-| Folder | Purpose | Includes | Game Types |
-|--------|---------|----------|-----------|
-| `ar/` | AR game assets | Audio, models, textures | AR games |
-| `rpg/` | RPG game assets | Animations, audio, sprites, tiles | RPG games |
-| `vr/` | VR game assets | Audio, models, textures | VR games |
-| `web/` | Web game assets | Audio, images, misc files | Web games |
-| `shared/` | Common assets | Audio, fonts, textures, UI | All game types |
-| `metadata/` | Asset metadata | Descriptions, licenses, versioning | Reference |
-
 ---
 
-## 🔄 CI/CD Workflows
+## � CI/CD Workflows
 
-### Assets CI Workflow (`assets-ci.yml`)
+This repository includes automated workflows to ensure asset quality and manage releases.
 
-**Triggers:** Automatically on every `push` and `pull_request` to `main`
+### Assets CI (`assets-ci.yml`)
+
+**Triggers:** Every push and PR to `main`
 
 **Validations:**
-- ✅ Checks that all required folders exist: `ar/`, `rpg/`, `vr/`, `web/`, `shared/`, `metadata/`
-- ✅ Scans for untracked files larger than 5MB (must use Git LFS)
-- ✅ Ensures Git LFS pointers are properly configured
-- ✅ Generates `asset-manifest.txt` listing all files with timestamps
-- ✅ Uploads manifest as workflow artifact
+- ✅ Required folders exist: `ar/`, `rpg/`, `vr/`, `web/`, `shared/`, `metadata/`
+- ✅ Files >5MB tracked by Git LFS
+- ✅ Generates `asset-manifest.txt` (directory listing with file sizes)
+- ✅ Uploads manifest as artifact
 
-**Status Check:** Required — pull requests cannot merge without passing this workflow.
+**Status:** Required to pass before PR merge
 
-### Release Workflow (`release.yml`)
+### Release (`release.yml`)
 
-**Triggers:** 
-- Version tags matching `v*` (e.g., `v1.0.0`, `v1.1.0-beta`)
-- Manual trigger via `workflow_dispatch`
+**Triggers:** Version tags (`v*`) or manual workflow dispatch
 
 **Actions:**
-- ✅ Generates/reuses `asset-manifest.txt` with release metadata
-- ✅ Creates a GitHub Release with auto-generated notes
-- ✅ Uploads asset manifest as release asset
+- ✅ Generates `asset-manifest.txt` with release metadata
+- ✅ Creates GitHub Release with auto-generated notes
+- ✅ Uploads manifest as release asset
 - ✅ Auto-detects prerelease status from tag format
 
 ---
 
-## 📝 Contributing
+## � Asset Manifest
+
+Both workflows generate `asset-manifest.txt`:
+- Repository metadata (commit SHA, timestamp)
+- Complete file listing with sizes
+- Useful for auditing and tracking versions
+
+**Locations:**
+- CI: Workflow artifacts (30-day retention)
+- Releases: Permanently attached to GitHub Release
+
+---
+
+### CI Workflow Failure (Missing Folders/Untracked Files)
+
+**Problem:** Assets CI workflow fails on push/PR
+
+**Debug:**
+1. Check logs: GitHub → **Actions** → **Assets CI** → latest run
+2. Verify folders: `ar/`, `rpg/`, `vr/`, `web/`, `shared/`, `metadata/`
+3. Verify LFS tracking: `git lfs ls-files`
+4. Check `.gitattributes` configuration
+
+**Solution:**
+```bash
+# Create .gitkeep placeholders
+touch ar/.gitkeep rpg/.gitkeep vr/.gitkeep web/.gitkeep shared/.gitkeep metadata/.gitkeep
+git add .gitkeep && git commit -m "chore: add gitkeep"
+
+# Verify LFS setup
+git lfs install && git lfs pull
+```
+
+### Release Workflow Not Triggering
+
+**Problem:** Tags don't trigger release workflow
+
+**Solution:** Ensure tag matches semantic versioning:
+```bash
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+```
+
+---
+
+## 📝 Contributing to This Repository
 
 ### Branch Protection Rules
 
-All changes to `main` branch require:
+All changes require:
 
-- ✅ **Pull Request Review** — Cannot push directly to `main`
-- ✅ **Minimum 1 Approval** — At least one reviewer must approve
-- ✅ **CI Workflow Pass** — `assets-ci` workflow must pass successfully
-- ✅ **Conversation Resolution** — All discussions must be resolved
-- ✅ **No Force Push** — Prevents accidental history rewriting
-- ✅ **No Deletion** — Branch cannot be deleted without admin override
+- ✅ Pull request (no direct pushes to `main`)
+- ✅ Minimum 1 approval
+- ✅ CI workflow pass (`assets-ci`)
+- ✅ Conversation resolution
+- ✅ No force push or deletion
 
 ### Creating a Pull Request
 
@@ -145,28 +347,18 @@ All changes to `main` branch require:
    git checkout -b feature/add-rpg-sprites
    ```
 
-2. **Make your changes** (add/update assets):
-   ```bash
-   # Ensure large files are tracked by Git LFS
-   git lfs track "*.png" "*.wav" "*.ogg" "*.psd"
-   ```
-
-3. **Commit your changes:**
+2. **Make changes and commit:**
    ```bash
    git add .
    git commit -m "feat: add new character sprites for RPG"
+   git lfs track "*.png"  # If adding new file types
    ```
 
-4. **Push to GitHub:**
+3. **Push and open PR:**
    ```bash
    git push -u origin feature/add-rpg-sprites
    ```
-
-5. **Open a Pull Request:**
-   - Navigate to GitHub and create PR from your feature branch
-   - Complete the [PR template](.github/pull_request_template.md)
-   - Request reviewers
-   - Address feedback and iterate
+   Complete the [PR template](.github/pull_request_template.md)
 
 ---
 
@@ -174,167 +366,52 @@ All changes to `main` branch require:
 
 | Document | Purpose |
 |----------|---------|
-| **[ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md)** | Comprehensive guide: Git submodules, Git LFS, best practices, troubleshooting |
-| **[.github/pull_request_template.md](./.github/pull_request_template.md)** | Standard template for all pull requests |
-| **[LICENSE](./LICENSE)** | Repository licensing information |
+| **[ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md)** | Detailed workflows, CI/CD, asset management, best practices |
+| **[.github/pull_request_template.md](./.github/pull_request_template.md)** | PR submission template |
+| **[LICENSE](./LICENSE)** | Repository license |
+
+> **Getting started?** See the **Integration Guide** section above.
 
 ---
 
-## 🔐 Best Practices
+---
 
-### Asset Management
+## � Asset Organization
 
-1. **Selective Submodule Inclusion** — Only clone game-type folders your project needs to optimize repository size
-   ```bash
-   # AR project - only include AR assets
-   git submodule add -b main https://github.com/NoContextOrg/anino-assets.git assets/ar
-   
-   # RPG project - include RPG + shared
-   git submodule add -b main https://github.com/NoContextOrg/anino-assets.git assets/rpg
-   git submodule add -b main https://github.com/NoContextOrg/anino-assets.git assets/shared
-   ```
-
-2. **Always Include Shared Assets** — When multiple game types depend on common resources (fonts, UI)
-
-3. **Never Edit Submodules Directly** — Always update the central repository; changes propagate automatically to all consuming projects
-
-4. **Verify Git LFS Installation** — Ensure all team members run `git lfs install` before cloning/updating
-
-### Git LFS Configuration
-
-1. **Track Large File Types:**
-   ```bash
-   git lfs track "*.png" "*.jpg" "*.wav" "*.ogg" "*.mp3" "*.psd" "*.blend" "*.fbx" "*.glb"
-   git add .gitattributes
-   git commit -m "config: add Git LFS tracking for asset file types"
-   ```
-
-2. **Verify LFS Tracking:**
-   ```bash
-   git lfs ls-files  # List all LFS-tracked files
-   git check-attr -a <file>  # Check if specific file is tracked
-   ```
-
-3. **Prevent Accidental Large File Commits:**
-   ```bash
-   git lfs migrate import --include="*.psd,*.blend"  # Migrate existing large files
-   ```
-
-### Development Workflow
-
-1. **Use Semantic Versioning** — Tag releases as `v1.0.0`, `v1.1.0`, `v2.0.0-beta`
-
-2. **Commit Message Convention:**
-   ```
-   feat: add new character animations for RPG
-   fix: resolve texture compression issue in VR assets
-   docs: update asset management guide
-   chore: optimize image sizes
-   ```
-
-3. **PR Scope** — Keep PRs focused to a single purpose (e.g., one asset type or one feature)
-
-4. **Documentation** — Update `ASSET_MANAGEMENT.md` or `README.md` if introducing new workflows or asset types
+| Folder | Purpose | Contents |
+|--------|---------|----------|
+| `ar/` | AR game assets | Audio, models, textures |
+| `rpg/` | RPG game assets | Animations, audio, sprites, tiles |
+| `vr/` | VR game assets | Audio, models, textures |
+| `web/` | Web game assets | Audio, images, misc files |
+| `shared/` | Shared by all types | Audio, fonts, textures, UI |
+| `metadata/` | Asset metadata | Descriptions, licenses, versioning |
 
 ---
 
-## 🔧 Troubleshooting
+## 🤝 Support
 
-### Large Files Not Tracked by Git LFS
-
-**Error:** CI workflow fails with "untracked large files" message
-
-**Solution:**
-```bash
-# Verify Git LFS is installed
-git lfs install
-
-# Configure tracking for your file types
-git lfs track "*.png"
-
-# Remove and re-add the file
-git rm --cached large-file.png
-git add large-file.png
-git commit -m "chore: configure Git LFS for PNG files"
-```
-
-### Missing Required Folders
-
-**Error:** CI workflow fails "Required folder 'X' not found"
-
-**Solution:**
-```bash
-# Create placeholder .gitkeep files for empty folders
-touch ar/.gitkeep rpg/.gitkeep vr/.gitkeep web/.gitkeep shared/.gitkeep metadata/.gitkeep
-git add .gitkeep
-git commit -m "chore: add gitkeep to preserve folder structure"
-```
-
-### Git LFS Pointers Not Pulling
-
-**Error:** LFS files appear as text pointers instead of actual content
-
-**Solution:**
-```bash
-# Ensure LFS is installed
-git lfs install
-
-# Pull LFS files
-git lfs pull
-
-# Verify tracking
-git lfs ls-files
-```
-
-### CI Workflow Fails Unexpectedly
-
-**Debug:**
-1. Check workflow logs in GitHub Actions: **Actions** → **Assets CI** → latest run
-2. Verify folder structure exists
-3. Verify all files >5MB are tracked by Git LFS
-4. Ensure `.gitattributes` is properly configured
-
----
-
-## 📊 Asset Manifest
-
-Both CI and Release workflows generate `asset-manifest.txt`, which contains:
-
-- Repository metadata (commit SHA, generation timestamp)
-- Complete directory structure
-- File listing with byte sizes
-- Useful for auditing and asset tracking
-
-**Location:**
-- CI artifacts: Available in workflow run details (30-day retention)
-- Release assets: Attached to each GitHub Release permanently
-
----
-
-## 🤝 Support & Contribution
-
-- **Issues:** Report bugs or request features via GitHub Issues
+- **Questions:** Check [ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md) for detailed workflows
+- **Issues:** Report via GitHub Issues
 - **Pull Requests:** Follow the [PR template](.github/pull_request_template.md)
-- **Questions:** Check [ASSET_MANAGEMENT.md](./ASSET_MANAGEMENT.md) first
+
+---
+
+## � References
+
+- [Git Submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules)
+- [Git LFS](https://git-lfs.github.com/)
+- [Sparse Checkout](https://git-scm.com/docs/git-sparse-checkout)
+- [GitHub Actions](https://docs.github.com/en/actions)
+- [Semantic Versioning](https://semver.org/)
 
 ---
 
 ## 📄 License
 
-This repository is licensed under the terms specified in the [LICENSE](./LICENSE) file.
+Licensed under the terms in [LICENSE](./LICENSE).
 
 ---
 
-## 🔗 Links
-
-- **Asset Repository:** https://github.com/NoContextOrg/anino-assets
-- **Main Project Repository:** https://github.com/NoContextOrg/anino
-- **Git LFS Documentation:** https://git-lfs.github.com/
-- **Git Submodules Documentation:** https://git-scm.com/book/en/v2/Git-Tools-Submodules
-- **GitHub Actions Documentation:** https://docs.github.com/en/actions
-- **Semantic Versioning:** https://semver.org/
-
----
-
-**Last Updated:** April 6, 2026  
+**Last Updated:** April 8, 2026  
 **Repository:** [NoContextOrg/anino-assets](https://github.com/NoContextOrg/anino-assets)
